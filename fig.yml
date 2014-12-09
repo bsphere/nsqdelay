@@ -1,0 +1,21 @@
+nsqdelay:
+  build: .
+  command: -lookupd_http_address=http://nsqlookupd:4161 -nsqd_tcp_address=nsqd:4150
+  links:
+    - nsqlookupd
+    - nsqd
+
+nsqd:
+  image: nsqio/nsqd
+  command: --broadcast-address=172.17.42.1 --lookupd-tcp-address=nsqlookupd:4160
+  links:
+    - nsqlookupd
+  ports:
+    - "4150:4150"
+    - "4151:4151"
+
+nsqlookupd:
+  image: nsqio/nsqlookupd
+  ports:
+    - "4160:4160"
+    - "4161:4161"
