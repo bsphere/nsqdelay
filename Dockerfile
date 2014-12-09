@@ -1,7 +1,7 @@
 FROM golang:1.3.3
 
 # install libsqlite3-dev
-RUN echo "deb http://ftp.debian.org/debian jessie-backports main contrib non-free" >> /etc/apt/sources.
+RUN echo "deb http://ftp.debian.org/debian jessie-backports main contrib non-free" >> /etc/apt/sources.list
 RUN apt-get update; apt-get install -y libsqlite3-dev
 
 # install godep
