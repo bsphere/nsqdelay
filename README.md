@@ -2,7 +2,7 @@ nsqdelay - a delayed message queue for NSQ
 ==========================================
 
 __nsqdelay__ can be used for sending delayed messages on top of NSQ,
-it listens on the __delayed__ channel by default (configurable) and receives JSON encoded messages with the following structure:
+it listens on the __delayed__ topic by default (configurable) and receives JSON encoded messages with the following structure:
 
 ```
 {
