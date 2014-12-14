@@ -61,8 +61,12 @@ func main() {
 	defer db.Close()
 
 	if _, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS messages(id TEXT, send_at INTEGER, topic TEXT, body BLOB);
-		CREATE UNIQUE INDEX ON messages(id);`); err != nil {
+		CREATE TABLE IF NOT EXISTS messages(id TEXT, send_at INTEGER, topic TEXT, body BLOB);`); err != nil {
+
+		log.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_messages ON messages(id);`); err != nil {
 
 		log.Fatal(err)
 	}
