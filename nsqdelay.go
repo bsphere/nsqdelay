@@ -1,18 +1,21 @@
 package main
 
 import (
-	_ "code.google.com/p/gosqlite/sqlite3"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
-	"github.com/augurysys/timestamp"
-	nsq "github.com/bitly/go-nsq"
 	"log"
 	"sync"
 	"time"
+
+	_ "code.google.com/p/gosqlite/sqlite3"
+	"github.com/augurysys/timestamp"
+	"github.com/bitly/go-nsq"
 )
 
+// DelayedMessage represents a data structure for publishing delayed messages
+// in a JSON encoded message body
 type DelayedMessage struct {
 	Topic  string              `json:"topic"`
 	Body   string              `json:"body"`
@@ -20,7 +23,7 @@ type DelayedMessage struct {
 }
 
 type message struct {
-	Id     string
+	ID     string
 	Topic  string
 	Body   []byte
 	SendAt timestamp.Timestamp
@@ -73,6 +76,7 @@ func main() {
 
 	// initialize channels
 	insert = make(chan *message)
+	publish := make(chan *message)
 
 	// initialize a consumer for delayed messages
 	c, err := nsq.NewConsumer(topic, "scheduler", nsq.NewConfig())
@@ -93,6 +97,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// handle message publishing with retries in a goroutine
+	go publishHandler(p, publish)
+
 	// handle sqlite insert, query and remove in a goroutine
 	go func() {
 		for {
@@ -100,7 +107,7 @@ func main() {
 			case m := <-insert:
 				if _, err := db.Exec(`
 					REPLACE INTO messages(id, send_at, topic, body) VALUES(?, ?, ?, ?);`,
-					m.Id, m.SendAt.Unix(), m.Topic, m.Body); err != nil {
+					m.ID, m.SendAt.Unix(), m.Topic, m.Body); err != nil {
 
 					log.Print(err)
 				}
@@ -125,7 +132,7 @@ func main() {
 						for _, d := range del {
 							// remove the message from sqlite
 							if _, err := db.Exec(`
-								DELETE from messages WHERE id=?`, d.Id); err != nil {
+								DELETE from messages WHERE id=?`, d.ID); err != nil {
 
 								log.Print(err)
 							}
@@ -135,19 +142,13 @@ func main() {
 					for rows.Next() {
 						var m message
 
-						if err := rows.Scan(&m.Id, &m.Topic, &m.Body); err != nil {
+						if err := rows.Scan(&m.ID, &m.Topic, &m.Body); err != nil {
 							log.Print(err)
 							return
 						}
 
 						// publish the message
-						err := p.Publish(m.Topic, m.Body)
-						if err != nil {
-							log.Print(err)
-							return
-						}
-
-						log.Printf("published message '%s' to topic '%s'", m.Id, m.Topic)
+						publish <- &m
 
 						// mark the message for deletion
 						del = append(del, &m)
@@ -186,7 +187,7 @@ func messageHandler(m *nsq.Message) error {
 
 	// insert the message to sqlite
 	ms := &message{
-		Id:     string(m.ID[:nsq.MsgIDLength]),
+		ID:     string(m.ID[:nsq.MsgIDLength]),
 		Topic:  d.Topic,
 		Body:   []byte(d.Body),
 		SendAt: d.SendAt,
@@ -195,4 +196,23 @@ func messageHandler(m *nsq.Message) error {
 	insert <- ms
 
 	return nil
+}
+
+func publishHandler(p *nsq.Producer, publish chan *message) {
+	for {
+		m := <-publish
+		if err := p.Publish(m.Topic, m.Body); err != nil {
+			log.Print(err)
+
+			// retry to send the message in 1 second
+			go func(m *message) {
+				time.Sleep(time.Second)
+				publish <- m
+			}(m)
+
+			continue
+		}
+
+		log.Printf("published message '%s' to topic '%s'", m.ID, m.Topic)
+	}
 }
