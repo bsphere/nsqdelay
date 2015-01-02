@@ -1,6 +1,8 @@
 nsqdelay - a delayed message queue for NSQ
 ==========================================
 
+[![Build Status](https://travis-ci.org/bsphere/nsqdelay.svg?branch=master)](https://travis-ci.org/bsphere/nsqdelay)
+
 __nsqdelay__ can be used for sending delayed messages on top of NSQ,
 it listens on the __delayed__ topic by default (configurable) and receives JSON encoded messages with the following structure:
 
